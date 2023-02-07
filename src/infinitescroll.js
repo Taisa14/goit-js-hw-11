@@ -2,35 +2,51 @@ import './css/styles.css';
 import SimpleLightbox from 'simplelightbox';
 import 'simplelightbox/dist/simple-lightbox.min.css';
 import { Notify } from 'notiflix/build/notiflix-notify-aio';
-import apiService from './fetchSubmit.js';
+import apiService from './fetctSubmit.js';
 
 const form = document.querySelector('.search-form');
-const loadBtn = document.querySelector('.load-more');
 const listPhoto = document.querySelector('.gallery');
-const input = document.querySelector('[name=searchQuery]');
+const guard = document.querySelector('.js-guard');
 
-loadBtn.addEventListener('click', onLoad);
+const options = {
+    root: null,
+    rootMargin: '200px',
+    treshhold: 1.0,
+};
+const observer = new IntersectionObserver(onLoad, options);
+
 form.addEventListener('submit', onSearch);
-input.addEventListener('input', offLoad);
 
 let counter = 40;
-loadBtn.hidden = true;
+
+function onLoad(entries, observer) {
+    console.log(entries);
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            ApiService.getRequest().then(data => {
+                createMarkupGallery(data);
+                counter += data.hits.length;
+                if (counter >= data.totalHits) {
+                    observer.unobserve(guard);
+                    return Notify.failure("We're sorry, but you've reached the end of search results.");
+                }
+            });
+        }
+    });
+}
 
 const ApiService = new apiService();
 
 function onClear() {
     listPhoto.innerHTML = '';
 }
-function offLoad() {
-    loadBtn.hidden = true;
-}
+
 function onSearch(evn) {
     evn.preventDefault();
+
     ApiService.searchQuery = evn.currentTarget.elements.searchQuery.value;
     console.log(ApiService.searchQuery);
-
     if (ApiService.searchQuery === '') {
-        loadBtn.hidden = true;
         onClear();
         return Notify.failure('Sorry, there are no images matching your search query. Please enter something!');
     }
@@ -39,38 +55,21 @@ function onSearch(evn) {
         console.log(data);
         onClear();
         createMarkupGallery(data);
-        loadBtn.hidden = false;
-    });
-}
-
-function onLoad() {
-    ApiService.getRequest().then(data => {
-        createMarkupGallery(data);
-        counter += data.hits.length;
-
-        if (counter >= data.totalHits) {
-            // console.log(data.totalHits);
-            loadBtn.hidden = true;
-            return Notify.failure(
-                "We're sorry, but you've reached the end of search results."
-            );
-        }
+        observer.observe(guard);
     });
 }
 
 function createMarkupGallery(data) {
-    const markupGallery = data.hits
-        .map(
-            ({
-                webformatURL,
-                largeImageURL,
-                tags,
-                likes,
-                views,
-                comments,
-                downloads,
-            }) => `<div class="photo-card">
-     <a href="${largeImageURL}"><img src="${webformatURL}" alt="${tags}" loading="lazy" class="picture"  /></a>
+    const markupGallery = data.hits.map(({
+        webformatURL,
+        largeImageURL,
+        tags,
+        likes,
+        views,
+        comments,
+        downloads,
+    }) => `<div class="photo-card">
+     <a href="${largeImageURL}"><img src="${webformatURL}" alt="${tags}" loading="lazy" class="picture" /></a>
       <div class="info">
         <p class="info-item">
           <b>Likes</b> ${likes}
@@ -86,8 +85,7 @@ function createMarkupGallery(data) {
         </p>
       </div>
     </div>`
-        )
-        .join('');
+    ).join('');
 
     listPhoto.insertAdjacentHTML('beforeend', markupGallery);
 
@@ -106,7 +104,7 @@ function smoothScroll() {
         .firstElementChild.getBoundingClientRect();
 
     window.scrollBy({
-        top: cardHeight,
+        top: cardHeight * 2,
         behavior: 'smooth',
     });
 }
